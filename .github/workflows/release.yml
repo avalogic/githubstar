@@ -25,7 +25,7 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact_name: githubstar-x64.exe
+            artifact_name: githubstar-x64
             asset_name: githubstar-x64.exe
           - os: ubuntu-latest
             artifact_name: githubstar-linux-x64
@@ -65,6 +65,6 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: dist/${{ matrix.artifact_name }}
-          asset_name: ${{ matrix.asset_name }}-${{ matrix.os }}
+          asset_name: ${{ matrix.asset_name }}
           tag: ${{ github.ref }}
           overwrite: true
