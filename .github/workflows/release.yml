@@ -53,7 +53,7 @@ jobs:
         run: |
           chmod +x dist/${{ matrix.artifact_name }}
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           path: dist/*
 
