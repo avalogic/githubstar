@@ -1,21 +1,17 @@
 #!env python
-import sys
 import datetime
 import os.path
+import sys
 from argparse import ArgumentParser
 from math import ceil
-from githubstar.fileexporter import StarsExporter
-from githubstar.version import VERSION
+
 from github import Github
 from urllib3 import Retry
 
-
-def printProgress(p, base=0):
-    if p < 0:
-        p = 0
-    elif p > 100:
-        p = 100
-    print("\rProgress: {}%".format(p + base), end="")
+from githubstar import utils
+from githubstar.fileexporter import StarsExporter
+from githubstar.starredfetcher import StarredFetcher
+from githubstar.version import VERSION
 
 
 def getFilePathName(args):
@@ -48,7 +44,7 @@ def starred_repos(user):
     for page_num in range(0, total_pages):
         for repo in starred.get_page(page_num):
             yield repo
-        printProgress(int(95 * (page_num + 1) / total_pages), 2)
+        utils.printProgress(int(75 * (page_num + 1) / total_pages), 22)
 
 
 def retryConfig(backoff_factor=1.0, total=8):
@@ -60,28 +56,90 @@ def retryConfig(backoff_factor=1.0, total=8):
 
 
 def parse_args():
-    parser = ArgumentParser(prog='githubstar', description="Export a GitHub user's starred list to local file.")
-    parser.add_argument('--version', action='version', version=VERSION)
-    parser.add_argument("--username", dest='username', required=True, help="[required]username to export from")
-    parser.add_argument("--token", dest='token', required=False,
-                        help="token from https://github.com/settings/tokens, to avoid rate-limiting, can also store in environment as 'GITHUB_TOKEN'.")
-    parser.add_argument("--format", dest='format', default="html", required=False,
-                        choices=['html', 'bookmark', 'md', 'json'], help="output format, default: html")
-    parser.add_argument("--groupby", dest='groupby', default="none", required=False,
-                        choices=['none', 'language', 'topic'], help="default: none")
-    parser.add_argument("--orderby", dest='orderby', default="timestarred", required=False,
-                        choices=['timestarred', 'timeupdated', 'alphabet', 'starscount', 'forkscount', 'language'],
-                        help="default: timestarred")
-    parser.add_argument("--orderdirection", dest="orderdirection", default="desc", required=False,
-                        choices=["desc", "asc"], help="default: desc")
-    parser.add_argument("--ordernum", dest="showOrderNum", default="true", required=False,
-                        choices=["true", "false"],
-                        help="show order number before repository name or not, default: true")
-    parser.add_argument("--excludeprivate", dest="excludeprivate", default="false", required=False,
-                        choices=["true", "false"],
-                        help="exclude private repositories, default: false")
-    parser.add_argument("--destpath", dest='destpath', required=False, help="path to store the exported file")
-    parser.add_argument("--destname", dest='destname', required=False, help="filename of the exported file")
+    parser = ArgumentParser(
+        prog="githubstar",
+        description="Export a GitHub user's starred list to local file.",
+    )
+    parser.add_argument("--version", action="version", version=VERSION)
+    parser.add_argument(
+        "--username",
+        dest="username",
+        required=True,
+        help="[required]username to export from",
+    )
+    parser.add_argument(
+        "--token",
+        dest="token",
+        required=False,
+        help="token from https://github.com/settings/tokens, to avoid rate-limiting, can also store in environment as 'GITHUB_TOKEN'.",
+    )
+    parser.add_argument(
+        "--format",
+        dest="format",
+        default="html",
+        required=False,
+        choices=["html", "bookmark", "md", "json"],
+        help="output format, default: html",
+    )
+    parser.add_argument(
+        "--groupby",
+        dest="groupby",
+        default="none",
+        required=False,
+        choices=["none", "language", "topic"],
+        help="default: none",
+    )
+    parser.add_argument(
+        "--orderby",
+        dest="orderby",
+        default="timestarred",
+        required=False,
+        choices=[
+            "timestarred",
+            "timeupdated",
+            "reponame",
+            "starscount",
+            "forkscount",
+            "language",
+        ],
+        help="default: timestarred",
+    )
+    parser.add_argument(
+        "--orderdirection",
+        dest="orderdirection",
+        default="desc",
+        required=False,
+        choices=["desc", "asc"],
+        help="default: desc",
+    )
+    parser.add_argument(
+        "--ordernum",
+        dest="showOrderNum",
+        default="true",
+        required=False,
+        choices=["true", "false"],
+        help="show order number before repository name or not, default: true",
+    )
+    parser.add_argument(
+        "--excludeprivate",
+        dest="excludeprivate",
+        default="false",
+        required=False,
+        choices=["true", "false"],
+        help="exclude private repositories, default: false",
+    )
+    parser.add_argument(
+        "--destpath",
+        dest="destpath",
+        required=False,
+        help="path to store the exported file",
+    )
+    parser.add_argument(
+        "--destname",
+        dest="destname",
+        required=False,
+        help="filename of the exported file",
+    )
     return parser.parse_args()
 
 
@@ -98,20 +156,39 @@ def main():
     if not token:
         token = os.getenv("GITHUB_TOKEN")
 
-    printProgress(0)
-    gh = Github(token, retry=retryConfig()) if args.token else Github(retry=retryConfig())
+    utils.printProgress(0)
+    fetcher = StarredFetcher(args.username)
+    fetcher.fetch()
+    utils.printProgress(20)
+
+    gh = (
+        Github(token, retry=retryConfig())
+        if args.token
+        else Github(retry=retryConfig())
+    )
     user = gh.get_user(args.username)
-    printProgress(1)
-    starred = []
+    utils.printProgress(21)
+    repos = []
     for repo in starred_repos(user):
         if repo.private and args.excludeprivate == "true":
             continue
-        starred.append(repo)
+        repos.append(repo)
 
-    StarsExporter.exportToFile(args, starred, filePathName, showOrderNum)
+    StarsExporter.exportToFile(
+        args,
+        repos,
+        fetcher.starredTopics,
+        fetcher.starredLists,
+        filePathName,
+        showOrderNum,
+    )
 
-    printProgress(100)
-    print("\nExport completed, time cost:", str(int(datetime.datetime.now().timestamp() - timestart)), "secs.")
+    utils.printProgress(100)
+    print(
+        "\nExport completed, time cost:",
+        str(int(datetime.datetime.now().timestamp() - timestart)),
+        "secs.",
+    )
 
 
 if __name__ == "__main__":

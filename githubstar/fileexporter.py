@@ -12,9 +12,9 @@ class StarsExporter(object):
                 repos.sort(key=lambda x: (x.pushed_at))
             case "timeupdated", "desc":
                 repos.sort(key=lambda x: (x.pushed_at), reverse=True)
-            case "alphabet", "asc":
+            case "reponame", "asc":
                 repos.sort(key=lambda x: (x.name if x.name else ""))
-            case "alphabet", "desc":
+            case "reponame", "desc":
                 repos.sort(key=lambda x: (x.name if x.name else ""), reverse=True)
             case "starscount", "asc":
                 repos.sort(key=lambda x: (x.stargazers_count))
@@ -27,9 +27,15 @@ class StarsExporter(object):
             case "language", "asc":
                 repos.sort(key=lambda x: (x.language if x.language else ""))
             case "language", "desc":
-                repos.sort(key=lambda x: (x.language if x.language else ""), reverse=True)
+                repos.sort(
+                    key=lambda x: (x.language if x.language else ""), reverse=True
+                )
             case "timestarred", "asc":
                 repos.reverse()
+
+    def sortReposInLists(starredLists, orderby, orderdirection):
+        for list in starredLists:
+            StarsExporter.sortRepos(list.repos, orderby, orderdirection)
 
     OTHERS_GROUP_NAME = "Others"
 
@@ -52,8 +58,14 @@ class StarsExporter(object):
                         repoGrouped = True
                 if repo.language:
                     languageLower = repo.language.lower()
-                    lanTopic = TopicsInfo.lanToTopicMap.get(languageLower, None) or languageLower
-                    if lanTopic not in repo.topics and lanTopic in TopicsInfo.hotTopicsSet:
+                    lanTopic = (
+                        TopicsInfo.lanToTopicMap.get(languageLower, None)
+                        or languageLower
+                    )
+                    if (
+                        lanTopic not in repo.topics
+                        and lanTopic in TopicsInfo.hotTopicsSet
+                    ):
                         if languageLower not in groups:
                             groups[languageLower] = []
                         groups[languageLower].append(repo)
@@ -65,35 +77,83 @@ class StarsExporter(object):
         groups = OrderedDict(sorted(groups.items(), key=lambda d: d[0]))
         if StarsExporter.OTHERS_GROUP_NAME in groups:
             groups.move_to_end(StarsExporter.OTHERS_GROUP_NAME)
-        if not (args.orderby == "timestarred" and args.orderdirection == "desc"):
-            for _, repos in groups.items():
-                StarsExporter.sortRepos(repos, args.orderby, args.orderdirection)
+        for _, repos in groups.items():
+            StarsExporter.sortRepos(repos, args.orderby, args.orderdirection)
         return groups
 
-    def exportToFile(args, starred, filePathName, showOrderNum):
-        if (args.groupby in ["language", "topic"]):
-            groups = StarsExporter.groupRepos(starred, args, args.groupby)
-            match args.format:
-                case "bookmark":
-                    StarsExporter.exportBookmarkGrouped(args.username, filePathName, groups)
-                case "md":
-                    StarsExporter.exportMdGrouped(args.username, filePathName, groups, showOrderNum)
-                case "json":
-                    StarsExporter.exportJsonGrouped(filePathName, groups)
-                case _:
-                    StarsExporter.exportHTMLGrouped(args.username, filePathName, groups, showOrderNum)
+    def getGroupByText(groupby):
+        if groupby == "language":
+            return "languages"
+        elif groupby == "topic":
+            return "topics"
         else:
-            if not (args.orderby == "timestarred" and args.orderdirection == "desc"):
-                StarsExporter.sortRepos(starred, args.orderby, args.orderdirection)
+            return "Index"
+
+    def exportToFile(
+        args, repos, starredTopics, starredLists, filePathName, showOrderNum
+    ):
+        StarsExporter.sortReposInLists(starredLists, args.orderby, args.orderdirection)
+        if args.groupby in ["language", "topic"]:
+            groupByText = StarsExporter.getGroupByText(args.groupby)
+            groups = StarsExporter.groupRepos(repos, args, args.groupby)
             match args.format:
                 case "bookmark":
-                    StarsExporter.exportBookmark(args.username, filePathName, starred)
+                    StarsExporter.exportBookmarkGrouped(
+                        args.username, filePathName, groups, starredTopics, starredLists
+                    )
                 case "md":
-                    StarsExporter.exportMd(args.username, filePathName, starred, showOrderNum)
+                    StarsExporter.exportMdGrouped(
+                        args.username,
+                        filePathName,
+                        groups,
+                        starredTopics,
+                        starredLists,
+                        showOrderNum,
+                        groupByText,
+                    )
                 case "json":
-                    StarsExporter.exportJson(filePathName, starred)
+                    StarsExporter.exportJsonGrouped(
+                        filePathName, groups, starredTopics, starredLists
+                    )
                 case _:
-                    StarsExporter.exportHTML(args.username, filePathName, starred, showOrderNum)
+                    StarsExporter.exportHTMLGrouped(
+                        args.username,
+                        filePathName,
+                        groups,
+                        starredTopics,
+                        starredLists,
+                        showOrderNum,
+                        groupByText,
+                    )
+        else:
+            StarsExporter.sortRepos(repos, args.orderby, args.orderdirection)
+            match args.format:
+                case "bookmark":
+                    StarsExporter.exportBookmark(
+                        args.username, filePathName, repos, starredTopics, starredLists
+                    )
+                case "md":
+                    StarsExporter.exportMd(
+                        args.username,
+                        filePathName,
+                        repos,
+                        starredTopics,
+                        starredLists,
+                        showOrderNum,
+                    )
+                case "json":
+                    StarsExporter.exportJson(
+                        filePathName, repos, starredTopics, starredLists
+                    )
+                case _:
+                    StarsExporter.exportHTML(
+                        args.username,
+                        filePathName,
+                        repos,
+                        starredTopics,
+                        starredLists,
+                        showOrderNum,
+                    )
 
     DESC_LENGTH_LIMIT = 200
 
@@ -111,16 +171,93 @@ class StarsExporter(object):
             0 .75.75 0 0 0 1.5 0Zm6.75.75a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-3 8.75a.75.75 0 1 0-1.5 0 .75.75 0 0 0 1.5 0Z"></path>
         </svg>"""
 
-    def exportHTML(username, filename, repos, showOrderNum):
-        with open(filename, "w+", encoding='utf-8') as f:
+    def exportHTMLTopics(f, starredTopics):
+        if len(starredTopics) > 0:
+            f.write("<H4>Starred topics</H4>\n")
+            f.write("<ul>\n")
+            for topicInfo in starredTopics:
+                f.write(
+                    "<li>"
+                    + "<a href='"
+                    + topicInfo.url
+                    + "' target='blank'>"
+                    + topicInfo.name
+                    + "</a></li>\n"
+                )
+            f.write("</ul><br><hr>\n")
+
+    def exportHTMLListsTitles(f, starredLists):
+        if len(starredLists) > 0:
+            f.write("<H4>Starred lists</H4>\n")
+            f.write("<ul>\n")
+            for listInfo in starredLists:
+                f.write(
+                    "<li>"
+                    + "<a href='#starredList_"
+                    + listInfo.name
+                    + "'>"
+                    + listInfo.name
+                    + "("
+                    + str(len(listInfo.repos))
+                    + ")"
+                    + "</a></li>\n"
+                )
+            f.write(
+                "</ul><br><a href='#starred_repositories'>Jump to starred repositories</a><br><br><hr>\n"
+            )
+
+    def exportHTMLListsBodies(f, starredLists, showOrderNum):
+        if len(starredLists) > 0:
+            for listInfo in starredLists:
+                if len(listInfo.repos) > 0:
+                    f.write("<DL><p>\n")
+                    f.write(
+                        "<DT><a id='starredList_"
+                        + listInfo.name
+                        + "'></a>"
+                        + listInfo.name
+                        + "</DT>"
+                    )
+                    if len(listInfo.description) > 0:
+                        f.write(
+                            "<DT><font color='gray' size='2'>"
+                            + listInfo.description
+                            + "</font></DT>"
+                        )
+                    f.write("<DD>&nbsp;</DD>\n")
+                    f.write(
+                        "<font size='1'><a href='#page_content_index'>[🔝 back to top]</a></font><br><br>\n"
+                    )
+                    ordernum = 0
+                    for repo in listInfo.repos:
+                        ordernum += 1
+                        StarsExporter.exportHtmlItem(f, repo, ordernum, showOrderNum)
+                    f.write("</DL><hr><p>\n")
+
+    def exportHTML(
+        username, filename, repos, starredTopics, starredLists, showOrderNum
+    ):
+        with open(filename, "w+", encoding="utf-8") as f:
             f.write("<HTML>\n")
-            f.write("<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n")
+            f.write(
+                '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n'
+            )
             f.write("<Title>Imported From Github</Title>\n")
-            f.write("""<style>
+            f.write(
+                """<style>
                 a {text-decoration: none;}
                 a:hover{text-decoration:underline;}
-            </style>\n""")
-            f.write("<DT><H3 FOLDED>Github Stars by " + username + "</H3>\n")
+                ul {list-style-type:none;}
+    	        ul li{display:inline-block;padding-right: 20px;}
+            </style>\n"""
+            )
+            f.write("<a id='page_content_index'></a>\n")
+            f.write("<H3 FOLDED>Github Stars by " + username + "</H3>\n")
+            StarsExporter.exportHTMLTopics(f, starredTopics)
+            StarsExporter.exportHTMLListsTitles(f, starredLists)
+            StarsExporter.exportHTMLListsBodies(f, starredLists, showOrderNum)
+            f.write("<a id='starred_repositories'></a>")
+            f.write("<H4>Starred repositories</H4>\n")
             f.write("<DL><p>\n")
             ordernum = 0
             for repo in repos:
@@ -129,20 +266,36 @@ class StarsExporter(object):
             f.write("</DL><p>\n")
             f.write("</HTML>")
 
-    def exportHTMLGrouped(username, filename, groups, showOrderNum):
-        with open(filename, "w+", encoding='utf-8') as f:
+    def exportHTMLGrouped(
+        username,
+        filename,
+        groups,
+        starredTopics,
+        starredLists,
+        showOrderNum,
+        groupByText,
+    ):
+        with open(filename, "w+", encoding="utf-8") as f:
             f.write("<HTML>\n")
-            f.write("<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n")
+            f.write(
+                '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n'
+            )
             f.write("<Title>Imported From Github</Title>\n")
-            f.write("""<style>
+            f.write(
+                """<style>
         a {text-decoration: none;}
         a:hover{text-decoration:underline;}
     	ul {list-style-type:none;}
     	ul li{display:inline-block;padding-right: 20px;}
-    </style>\n""")
-            f.write("<a id='page_content_index'/>\n")
-            f.write("<DT><H3 FOLDED>Github Stars by " + username + "</H3>\n")
-            f.write("<H4>Index</H4>\n")
+    </style>\n"""
+            )
+            f.write("<a id='page_content_index'></a>\n")
+            f.write("<H3 FOLDED>Github Stars by " + username + "</H3>\n")
+            StarsExporter.exportHTMLTopics(f, starredTopics)
+            StarsExporter.exportHTMLListsTitles(f, starredLists)
+            StarsExporter.exportHTMLListsBodies(f, starredLists, showOrderNum)
+            f.write("<a id='starred_repositories'></a>")
+            f.write("<H4>Starred repositories grouped by " + groupByText + "</H4>\n")
             f.write("<ul>\n")
             for key in groups.keys():
                 f.write("<li>" + "<a href='#" + key + "'>" + key.title() + "</li>\n")
@@ -150,83 +303,241 @@ class StarsExporter(object):
             for key, group in groups.items():
                 f.write("<DL><p>\n")
                 f.write(
-                    "<DT><a id='" + key + "'>" + key.title() + "</a></DT><hr><font size='1'><a href='#page_content_index'>[🔝 back to top]</a></font><br><br>\n")
+                    "<DT><a id='"
+                    + key
+                    + "'></a>"
+                    + key.title()
+                    + "</DT><DD>&nbsp;</DD><font size='1'><a href='#page_content_index'>[🔝 back to top]</a></font><br><br>\n"
+                )
                 ordernum = 0
                 for repo in group:
                     ordernum += 1
                     StarsExporter.exportHtmlItem(f, repo, ordernum, showOrderNum)
-                f.write("</DL><p>\n")
+                f.write("</DL><hr><p>\n")
             f.write("</HTML>")
 
     def exportHtmlItem(f, repo, ordernum, showOrderNum):
         link = "<DT>" + ((str(ordernum) + ".&nbsp;") if showOrderNum else " ")
-        link = link + "<A target='blank' HREF=\"" + repo.html_url + "\">" + repo.full_name + "</A></DT>\n"
-        link += "<DD>" + html.escape(
-            repo.description[:StarsExporter.DESC_LENGTH_LIMIT]) if repo.description else "&nbsp;" + "</DD>\n"
-        link += ("<DD><font color='gray' size='1'>" + (
-            repo.language + "&nbsp;&nbsp;&nbsp;" if repo.language else "&nbsp;") + StarsExporter.star_img + str(
-            repo.stargazers_count) + "&nbsp;&nbsp;" + StarsExporter.fork_img + str(
-            repo.forks_count) + "&nbsp;&nbsp;Updated on " + repo.pushed_at.strftime("%Y-%m-%d") + "</font></DD>\n")
-        link += "<DD>&nbsp;</Dd>\n"
+        link = (
+            link
+            + "<A target='blank' HREF=\""
+            + repo.html_url
+            + '">'
+            + repo.full_name
+            + "</A></DT>\n"
+        )
+        if repo.description:
+            link += (
+                "<DD>"
+                + html.escape(repo.description[: StarsExporter.DESC_LENGTH_LIMIT])
+                if repo.description
+                else "&nbsp;" + "</DD>\n"
+            )
+        link += (
+            "<DD><font color='gray' size='1'>"
+            + (repo.language + "&nbsp;&nbsp;&nbsp;" if repo.language else "&nbsp;")
+            + StarsExporter.star_img
+            + str(repo.stargazers_count)
+            + "&nbsp;&nbsp;"
+            + StarsExporter.fork_img
+            + str(repo.forks_count)
+            + "&nbsp;&nbsp;Updated on "
+            + repo.pushed_at.strftime("%Y-%m-%d")
+            + "</font></DD>\n"
+        )
+        link += "<DD>&nbsp;</DD>\n"
         f.write(link)
 
-    def exportBookmark(username, filename, repos):
-        with open(filename, "w+", encoding='utf-8') as f:
+    def exportBookmarkTopics(f, starredTopics):
+        if len(starredTopics) > 0:
+            f.write("<DT><H3 FOLDED>Starred Topics</H3>\n")
+            f.write("<DL><p>\n")
+            for topic in starredTopics:
+                f.write(
+                    "<DT>"
+                    + "<A target='blank' HREF=\""
+                    + topic.url
+                    + '">'
+                    + topic.name
+                    + "</A></DT>\n"
+                )
+            f.write("</DL><p>\n")
+
+    def exportBookmarkLists(f, starredLists):
+        if len(starredLists) > 0:
+            f.write("<DT><H3 FOLDED>Starred Lists</H3>\n")
+            f.write("<DL><p>\n")
+            for list in starredLists:
+                f.write("   <DT><H3 FOLDED>" + list.name + "</H3>\n")
+                f.write("   <DL><p>\n")
+                for repo in list.repos:
+                    f.write(
+                        "       <DT>"
+                        + "<A target='blank' HREF=\""
+                        + repo.html_url
+                        + '">'
+                        + repo.full_name
+                        + "</A></DT>\n"
+                    )
+                f.write("   </DL><p>\n")
+            f.write("</DL><p>\n")
+
+    def exportBookmark(username, filename, repos, starredTopics, starredLists):
+        with open(filename, "w+", encoding="utf-8") as f:
             f.write("<HTML>\n")
-            f.write("<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n")
+            f.write(
+                '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n'
+            )
             f.write("<Title>Imported From Github</Title>\n")
-            f.write("""<style>
+            f.write(
+                """<style>
                 a {text-decoration: none;}
                 a:hover{text-decoration:underline;}
-            </style>\n""")
-            f.write("<DT><H3 FOLDED>Github Stars by " + username + "</H3>\n")
+            </style>\n"""
+            )
+            f.write(
+                "<DL>\n<DT><H3 FOLDED>Github Stars by " + username + "</H3>\n<DL>\n"
+            )
+            StarsExporter.exportBookmarkTopics(f, starredTopics)
+            StarsExporter.exportBookmarkLists(f, starredLists)
+            f.write("<DT><H3 FOLDED>Starred Repos</H3>\n")
             f.write("<DL><p>\n")
             for repo in repos:
-                f.write("<DT>" + "<A target='blank' HREF=\"" + repo.html_url + "\">" + repo.full_name + "</A></DT>\n")
-            f.write("</DL><p>\n")
+                f.write(
+                    "<DT>"
+                    + "<A target='blank' HREF=\""
+                    + repo.html_url
+                    + '">'
+                    + repo.full_name
+                    + "</A></DT>\n"
+                )
+            f.write("</DL><p>\n</DL>\n</DL>\n")
             f.write("</HTML>")
 
-    def exportBookmarkGrouped(username, filename, groups):
-        with open(filename, "w+", encoding='utf-8') as f:
+    def exportBookmarkGrouped(username, filename, groups, starredTopics, starredLists):
+        with open(filename, "w+", encoding="utf-8") as f:
             f.write("<HTML>\n")
-            f.write("<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=UTF-8\">\n")
+            f.write(
+                '<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">\n'
+            )
             f.write("<Title>Imported From Github</Title>\n")
-            f.write("""<style>
+            f.write(
+                """<style>
                 a {text-decoration: none;}
                 a:hover{text-decoration:underline;}
-            </style>\n""")
-            f.write("<DT><H3 FOLDED>Github Stars by " + username + "</H3>\n")
+            </style>\n"""
+            )
+            f.write(
+                "<DL>\n<DT><H3 FOLDED>Github Stars by " + username + "</H3>\n<DL>\n"
+            )
+            StarsExporter.exportBookmarkTopics(f, starredTopics)
+            StarsExporter.exportBookmarkLists(f, starredLists)
+            f.write("<DT><H3 FOLDED>Starred Repos</H3>\n")
             f.write("<DL><p>\n")
             for key, repos in groups.items():
                 f.write("   <DT><H3 FOLDED>" + key.title() + "</H3>\n")
                 f.write("   <DL><p>\n")
                 for repo in repos:
-                    f.write("       <DT>" + "<A target='blank' HREF=\"" + repo.html_url + "\">" + repo.full_name \
-                            + "</A></DT>\n")
+                    f.write(
+                        "       <DT>"
+                        + "<A target='blank' HREF=\""
+                        + repo.html_url
+                        + '">'
+                        + repo.full_name
+                        + "</A></DT>\n"
+                    )
                 f.write("   </DL><p>\n")
-            f.write("</DL><p>\n")
+            f.write("</DL><p>\n</DL>\n</DL>\n")
             f.write("</HTML>")
 
-    def exportMd(username, filename, repos, showOrderNum):
-        with (open(filename, "w+", encoding='utf-8') as f):
-            f.write("# GitHub Stars\n")
-            f.write("\n&nbsp;&nbsp;by " + username + "\n\n")
-            StarsExporter.exportMdItem(f, repos, showOrderNum)
+    def exportMdTopics(f, starredTopics):
+        if len(starredTopics) > 0:
+            f.write("\n## Starred topics\n")
+            for topicInfo in starredTopics:
+                f.write("  - [" + topicInfo.name + "](" + topicInfo.url + ")\n")
 
-    def exportMdGrouped(username, filename, groups, showOrderNum):
-        with (open(filename, "w+", encoding='utf-8') as f):
-            f.write("# GitHub Stars\n")
-            f.write("\n&nbsp;&nbsp;by " + username + "\n\n")
-            f.write("\n## Index<a id='page_content_index'></a>\n")
-            f.write("""<style>
+    def exportMdListsTitles(f, starredLists):
+        if len(starredLists) > 0:
+            f.write("\n## Starred lists\n")
+            for listInfo in starredLists:
+                f.write(
+                    "  - ["
+                    + listInfo.name
+                    + "("
+                    + str(len(listInfo.repos))
+                    + ")](#starredList_"
+                    + listInfo.name.replace(" ", "-")
+                    + ")\n"
+                )
+            f.write("\n ## [Jump to starred repositories](#starred_repositories)\n\n")
+
+    def exportMdListsBodies(f, starredLists, showOrderNum):
+        if len(starredLists) > 0:
+            for listInfo in starredLists:
+                if len(listInfo.repos) > 0:
+                    f.write(
+                        "\n## "
+                        + listInfo.name
+                        + "\n<a id='starredList_"
+                        + listInfo.name.replace(" ", "-")
+                        + "'></a>\n[🔝 back to top](#page_content_index)\n"
+                    )
+                    StarsExporter.exportMdItem(f, listInfo.repos, showOrderNum)
+
+    def exportMd(username, filename, repos, starredTopics, starredLists, showOrderNum):
+        with open(filename, "w+", encoding="utf-8") as f:
+            f.write(
+                "# GitHub Stars by " + username + "<a id='page_content_index'></a>\n"
+            )
+            f.write(
+                """<style>
             	ul {list-style-type:none;}
             	ul li{display:inline-block;padding-right: 20px;}
-            </style>\n\n""")
+            </style>\n\n"""
+            )
+            StarsExporter.exportMdTopics(f, starredTopics)
+            StarsExporter.exportMdListsTitles(f, starredLists)
+            StarsExporter.exportMdListsBodies(f, starredLists, showOrderNum)
+            f.write("\n## Starred repositories<a id='starred_repositories'></a>\n")
+            StarsExporter.exportMdItem(f, repos, showOrderNum)
+
+    def exportMdGrouped(
+        username,
+        filename,
+        groups,
+        starredTopics,
+        starredLists,
+        showOrderNum,
+        groupByText,
+    ):
+        with open(filename, "w+", encoding="utf-8") as f:
+            f.write(
+                "# GitHub Stars by " + username + "<a id='page_content_index'></a>\n"
+            )
+            f.write(
+                """<style>
+            	ul {list-style-type:none;}
+            	ul li{display:inline-block;padding-right: 20px;}
+            </style>\n\n"""
+            )
+            StarsExporter.exportMdTopics(f, starredTopics)
+            StarsExporter.exportMdListsTitles(f, starredLists)
+            StarsExporter.exportMdListsBodies(f, starredLists, showOrderNum)
+            f.write(
+                "\n## Starred repositories grouped by "
+                + groupByText
+                + "<a id='starred_repositories'></a>\n"
+            )
             for key in groups.keys():
                 f.write("  - [" + key.title() + "](#" + key.replace(" ", "-") + ")\n")
             for key, repos in groups.items():
-                f.write("\n## " + key.title() + "<a id='" + key.replace(" ", "-") \
-                        + "'></a>\n[🔝 back to top](#page_content_index)\n")
+                f.write(
+                    "\n## "
+                    + key.title()
+                    + "<a id='"
+                    + key.replace(" ", "-")
+                    + "'></a>\n[🔝 back to top](#page_content_index)\n"
+                )
                 StarsExporter.exportMdItem(f, repos, showOrderNum)
 
     def exportMdItem(f, repos, showOrderNum):
@@ -235,15 +546,82 @@ class StarsExporter(object):
         ordernum = 0
         for repo in repos:
             ordernum += 1
-            link = "### " + ((str(ordernum) + ". ") if showOrderNum else " ") \
-                   + "[" + repo.full_name + "](" + repo.html_url + ")" + "\n\n"
-            link += (html.escape(
-                repo.description[:StarsExporter.DESC_LENGTH_LIMIT]) if repo.description else "&nbsp;") + "  \n"
-            link += ("<font color='gray'>" + (
-                repo.language + "&nbsp;&nbsp;&nbsp;" if repo.language else "&nbsp;") + star_img + str(
-                repo.stargazers_count) + "&nbsp;&nbsp;" + fork_img + str(repo.forks_count) + "&nbsp;&nbsp;Updated on "
-                     + repo.pushed_at.strftime("%Y-%m-%d") + "</font>\n\n---\n")
+            link = (
+                "### "
+                + ((str(ordernum) + ". ") if showOrderNum else " ")
+                + "["
+                + repo.full_name
+                + "]("
+                + repo.html_url
+                + ")"
+                + "\n\n"
+            )
+            link += (
+                html.escape(repo.description[: StarsExporter.DESC_LENGTH_LIMIT])
+                if repo.description
+                else ""
+            ) + "  \n"
+            link += (
+                "<font color='gray'>"
+                + (repo.language + "&nbsp;&nbsp;&nbsp;" if repo.language else "&nbsp;")
+                + star_img
+                + str(repo.stargazers_count)
+                + "&nbsp;&nbsp;"
+                + fork_img
+                + str(repo.forks_count)
+                + "&nbsp;&nbsp;Updated on "
+                + repo.pushed_at.strftime("%Y-%m-%d")
+                + "</font>\n\n"
+            )
             f.write(link)
+
+    def exportJsonStarredTopics(f, starredTopics):
+        f.write('"starred_topics": [\n')
+        count = 0
+        for topic in starredTopics:
+            jsonString = f"""        {{
+            "name": "{topic.name}",
+            "html_url": "{topic.url}"
+        }}"""
+            count += 1
+            if count < len(starredTopics):
+                jsonString += ",\n"
+            f.write(jsonString)
+        f.write("\n],\n")
+
+    def repoInLists2jsonstring(repo):
+        description = json.dumps(repo.description or "", ensure_ascii=False)
+        return f"""        {{
+            "name": "{repo.name}",
+            "full_name": "{repo.full_name}",
+            "description": {description},
+            "language": "{repo.language}",
+            "html_url": "{repo.html_url}",
+            "forks_count": {repo.forks_count},
+            "stargazers_count": {repo.stargazers_count},
+            "pushed_at": "{repo.pushed_at}"
+        }}"""
+
+    def exportJsonStarredLists(f, starredLists):
+        f.write('"starred_lists": [\n')
+        groupsPos = 0
+        for list in starredLists:
+            f.write('{\n    "name":"' + list.name + '",')
+            f.write('\n    "description":"' + list.description + '",')
+            f.write('\n    "html_url":"' + list.url + '",')
+            f.write('\n    "repositories": [\n')
+            reposPos = 0
+            for repo in list.repos:
+                jsonString = StarsExporter.repoInLists2jsonstring(repo)
+                reposPos += 1
+                if reposPos < len(list.repos):
+                    jsonString += ",\n"
+                f.write(jsonString)
+            f.write("\n    ]\n}")
+            groupsPos += 1
+            if groupsPos < len(starredLists):
+                f.write(",")
+        f.write("\n],")
 
     def repo2jsonstring(repo):
         description = json.dumps(repo.description or "", ensure_ascii=False)
@@ -264,37 +642,43 @@ class StarsExporter(object):
             "stargazers_count": {repo.stargazers_count},
             "watchers_count": {repo.watchers_count},
             "created_at": "{repo.created_at}",
-            "pushed_at": "{repo.pushed_at}",
+            "pushed_at": "{repo.pushed_at}"
         }}"""
 
-    def exportJsonGrouped(filename, groups):
-        with open(filename, "w+", encoding='utf-8') as f:
-            f.write("{\n\"groups\": [\n")
+    def exportJsonGrouped(filename, groups, starredTopics, starredLists):
+        with open(filename, "w+", encoding="utf-8") as f:
+            f.write("{\n")
+            StarsExporter.exportJsonStarredTopics(f, starredTopics)
+            StarsExporter.exportJsonStarredLists(f, starredLists)
+            f.write('"starred_repositories": [\n')
             groupsPos = 0
             for key, repos in groups.items():
-                f.write("{\n\"groupname\":\"" + key.title() + "\",")
-                f.write("\n\"repositories\": [\n")
+                f.write('{\n"groupname":"' + key.title() + '",')
+                f.write('\n"repositories": [\n')
                 reposPos = 0
                 for repo in repos:
                     jsonString = StarsExporter.repo2jsonstring(repo)
                     reposPos += 1
-                    if (reposPos < len(repos)):
+                    if reposPos < len(repos):
                         jsonString += ",\n"
                     f.write(jsonString)
                 f.write("\n]\n}")
                 groupsPos += 1
-                if (groupsPos < len(groups)):
+                if groupsPos < len(groups):
                     f.write(",")
             f.write("\n]\n}")
 
-    def exportJson(filename, repos):
-        with open(filename, "w+", encoding='utf-8') as f:
-            f.write("{\n\"repositories\": [\n")
+    def exportJson(filename, repos, starredTopics, starredLists):
+        with open(filename, "w+", encoding="utf-8") as f:
+            f.write("{\n")
+            StarsExporter.exportJsonStarredTopics(f, starredTopics)
+            StarsExporter.exportJsonStarredLists(f, starredLists)
+            f.write('"starred_repositories": [\n')
             count = 0
             for repo in repos:
                 jsonString = StarsExporter.repo2jsonstring(repo)
                 count += 1
-                if (count < len(repos)):
+                if count < len(repos):
                     jsonString += ",\n"
                 f.write(jsonString)
             f.write("\n]\n}")

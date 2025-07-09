@@ -43,7 +43,7 @@ jobs:
           echo 'VERSION="${{ inputs.version}}"' > ./githubstar/version.py
       - uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: 3.13
 
       - run: pip install -r requirements.txt pyinstaller
       - run: pyinstaller --onefile githubstar/githubstar.py -n ${{ matrix.artifact_name }}
