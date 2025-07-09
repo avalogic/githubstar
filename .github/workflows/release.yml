@@ -53,9 +53,11 @@ jobs:
         run: |
           chmod +x dist/${{ matrix.artifact_name }}
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          path: dist/*
+          name: ${{ matrix.artifact_name }}-${{ matrix.os }}
+          path: dist/${{ matrix.artifact_name }}
 
       - name: Upload Release
         if: startsWith(github.ref, 'refs/tags/') || inputs.uploadRelease
@@ -63,6 +65,6 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: dist/${{ matrix.artifact_name }}
-          asset_name: ${{ matrix.asset_name }}
+          asset_name: ${{ matrix.asset_name }}-${{ matrix.os }}
           tag: ${{ github.ref }}
           overwrite: true
