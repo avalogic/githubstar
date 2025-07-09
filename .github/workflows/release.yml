@@ -25,7 +25,7 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            artifact_name: githubstar-x64
+            artifact_name: githubstar-x64.exe
             asset_name: githubstar-x64.exe
           - os: ubuntu-latest
             artifact_name: githubstar-linux-x64
