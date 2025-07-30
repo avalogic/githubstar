@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "githubstar"
+dynamic = ["version"]
+description = "Export Github starred repos list to file"
+authors = [
+    {name = "avalogic@github"},
+    ]
+readme = "README.md"
+license = {file = "LICENSE"}
+keywords = ["github", "star", "stars", "starred", "export"]
+requires-python = ">=3.13"
+classifiers = [
+    "Intended Audience :: Developers",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.13",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+  "PyGithub >=1.59.1, <2.0.0",
+]
+[tool.setuptools.dynamic]
+version = {attr = "githubstar.version.VERSION"} 
+[project.urls]
+Homepage = "https://github.com/avalogic/githubstar"
+
+[project.scripts]
+githubstar = "githubstar.githubstar:main"

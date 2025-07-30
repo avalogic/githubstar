@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version (A.B.C)
+        required: true
+        default: '1.0.0'
+        type: string
+      uploadRelease:
+        description: upload release files
+        required: false
+        default: false
+        type: boolean
+
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: windows-latest
+            artifact_name: githubstar-x64.exe
+            asset_name: githubstar-x64.exe
+          - os: ubuntu-latest
+            artifact_name: githubstar-linux-x64
+            asset_name: githubstar-linux-x64
+            chmod: true
+          - os: macos-latest
+            artifact_name: githubstar-macos
+            asset_name: githubstar-macos
+            chmod: true
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Version
+        run: |
+          echo 'VERSION="${{ inputs.version}}"' > ./githubstar/version.py
+      - uses: actions/setup-python@v4
+        with:
+          python-version: 3.13
+
+      - run: pip install -r requirements.txt pyinstaller
+      - run: pyinstaller --onefile githubstar/githubstar.py -n ${{ matrix.artifact_name }}
+
+      - name: Verify
+        if: ${{ matrix.chmod }}
+        run: |
+          chmod +x dist/${{ matrix.artifact_name }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}-${{ matrix.os }}
+          path: dist/${{ matrix.artifact_name }}
+
+      - name: Upload Release
+        if: startsWith(github.ref, 'refs/tags/') || inputs.uploadRelease
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dist/${{ matrix.artifact_name }}
+          asset_name: ${{ matrix.asset_name }}
+          tag: ${{ github.ref }}
+          overwrite: true
